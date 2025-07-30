@@ -24,6 +24,7 @@ jobs:
           else
             echo "⛔️ PR must be merged from development"
             echo "should_deploy=false" >> $GITHUB_OUTPUT
+          fi
         shell: bash
 
   build-and-push:
