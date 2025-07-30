@@ -1,4 +1,4 @@
-name: Build and Push Docker Image with Auto Versioning
+name: Build and Push Docker Image with Semantic Versioning
 
 on:
   pull_request:
@@ -11,30 +11,30 @@ jobs:
   check_merge_condition:
     runs-on: ubuntu-latest
     outputs:
-      should_deploy: ${{ steps.set_output.outputs.should_deploy }}
+      should_proceed: ${{ steps.check.outputs.should_proceed }}
     steps:
-      - name: Check if PR is merged from development
-        id: set_output
+      - name: Check if PR was merged from development
+        id: check
         run: |
           echo "Merged: ${{ github.event.pull_request.merged }}"
           echo "Head ref: ${{ github.event.pull_request.head.ref }}"
+
           if [[ "${{ github.event.pull_request.merged }}" == "true" && "${{ github.event.pull_request.head.ref }}" == "development" ]]; then
-            echo "✅ PR was merged from development"
-            echo "should_deploy=true" >> $GITHUB_OUTPUT
+            echo "should_proceed=true" >> $GITHUB_OUTPUT
           else
-            echo "⛔️ PR must be merged from development"
-            echo "should_deploy=false" >> $GITHUB_OUTPUT
+            echo "should_proceed=false" >> $GITHUB_OUTPUT
           fi
-        shell: bash
 
   build-and-push:
     needs: check_merge_condition
-    if: needs.check_merge_condition.outputs.should_deploy == 'true'
+    if: needs.check_merge_condition.outputs.should_proceed == 'true'
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -45,49 +45,49 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Determine next version from DockerHub
-        id: next_version
+      - name: Get latest tag from Docker Hub
+        id: latest_tag
         run: |
-          REPO="${{ secrets.DOCKERHUB_USERNAME }}/silent-log-agent"
+          tags=$(curl -s "https://hub.docker.com/v2/repositories/${{ secrets.DOCKERHUB_USERNAME }}/silent-log-agent/tags?page_size=100" | jq -r '.results[].name' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V)
 
-          echo "Fetching tags from DockerHub repo: $REPO"
-
-          tags=$(curl -s "https://hub.docker.com/v2/repositories/${REPO}/tags/?page_size=100" | jq -r '.results[].name' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V)
-
-          if [[ -z "$tags" ]]; then
-            echo "No tags found. Starting from v1.0.0"
-            new_tag="v1.0.0"
+          latest=$(echo "$tags" | tail -n 1)
+          if [[ -z "$latest" ]]; then
+            latest="v1.0.0"
           else
-            latest_tag=$(echo "$tags" | tail -n 1 | tr -d 'v')
-            IFS='.' read -r major minor patch <<< "$latest_tag"
+            major=$(echo $latest | cut -d. -f1 | tr -d 'v')
+            minor=$(echo $latest | cut -d. -f2)
+            patch=$(echo $latest | cut -d. -f3)
 
             patch=$((patch + 1))
-            if [[ $patch -gt 9 ]]; then
+            if [ $patch -gt 9 ]; then
               patch=0
               minor=$((minor + 1))
             fi
-            if [[ $minor -gt 9 ]]; then
+
+            if [ $minor -gt 9 ]; then
               minor=0
               major=$((major + 1))
             fi
 
-            new_tag="v${major}.${minor}.${patch}"
-            echo "Latest tag was v$latest_tag. New tag is $new_tag"
+            latest="v$major.$minor.$patch"
           fi
 
-          echo "new_tag=$new_tag" >> $GITHUB_OUTPUT
+          echo "new_tag=$latest" >> $GITHUB_OUTPUT
 
       - name: Build and Push Docker Image
         run: |
-          TAG=${{ steps.next_version.outputs.new_tag }}
-          IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/silent-log-agent:$TAG
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/silent-log-agent:${{ steps.latest_tag.outputs.new_tag }} \
+                       -t ${{ secrets.DOCKERHUB_USERNAME }}/silent-log-agent:latest .
 
-          docker build -t $IMAGE .
-          docker push $IMAGE
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/silent-log-agent:${{ steps.latest_tag.outputs.new_tag }}
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/silent-log-agent:latest
 
-      - name: Tag and Push Git Tag
+      - name: Push Git Tag
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
         run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-          git tag ${{ steps.next_version.outputs.new_tag }}
-          git push origin ${{ steps.next_version.outputs.new_tag }}
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          git tag ${{ steps.latest_tag.outputs.new_tag }}
+          git remote set-url origin https://x-access-token:${GH_PAT}@github.com/${{ github.repository }}
+          git push origin ${{ steps.latest_tag.outputs.new_tag }}
