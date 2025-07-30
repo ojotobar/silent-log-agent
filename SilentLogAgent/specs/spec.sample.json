@@ -1,0 +1,41 @@
+[
+  {
+    "id": "test-log",
+    "name": "Test Log Monitor",
+    "logFilePath": "logs/app.log",
+    "pattern": "(?<timestamp>\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:Z|[+-]\\d{2}:\\d{2}))\\s+(?<level>[A-Z]+)\\s+(?<message>.+)",
+    "silenceThresholdMinutes": 1440,
+    "timestampGroupName": "timestamp",
+    "isCritical": true,
+    "labels": {
+      "service": "TestMonitor",
+      "environment": "Production"
+    }
+  },
+  {
+    "id": "sample-log",
+    "name": "Sample Log",
+    "logFilePath": "logs/app.log",
+    "pattern": "\\[(?<timestamp>\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2})\\]\\s+Payment processed successfully",
+    "silenceThresholdMinutes": 720,
+    "timestampGroupName": "timestamp",
+    "isCritical": false,
+    "labels": {
+      "service": "Sample",
+      "environment": "Staging"
+    }
+  },
+  {
+    "id": "sample-service-3",
+    "name": "Sample Service 3 Log",
+    "logFilePath": "logs/app.log",
+    "pattern": "^(?<timestamp>\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2})",
+    "silenceThresholdMinutes": 360,
+    "timestampGroupName": "timestamp",
+    "isCritical": true,
+    "labels": {
+      "service": "Sample3",
+      "environment": "dev"
+    }
+  }
+]
