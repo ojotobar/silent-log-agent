@@ -1,4 +1,4 @@
-﻿![Docker Image Version](https://img.shields.io/docker/v/blueclikk/silent-log-agent?sort=semver&label=version)
+![Docker Image Version](https://img.shields.io/docker/v/blueclikk/silent-log-agent?sort=semver&label=version)
 ![Docker Pulls](https://img.shields.io/docker/pulls/blueclikk/silent-log-agent)
 
 # 🕵️ SilentLogAgent
